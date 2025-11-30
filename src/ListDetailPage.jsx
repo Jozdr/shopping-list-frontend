@@ -1,25 +1,92 @@
 import React, { useState } from "react";
+import ListHeader from "./components/ListHeader";
+import MembersSection from "./components/MembersSection";
+import ItemsSection from "./components/ItemsSection";
+import { useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
-// Konstantní data – po reloadu se vrátí původní hodnoty
-const INITIAL_LIST = {
-  id: "list-1",
-  title: "Víkendový nákup",
-  items: [
-    { id: "item-1", name: "Mléko", resolved: false },
-    { id: "item-2", name: "Chléb", resolved: false },
-    { id: "item-3", name: "Máslo", resolved: true },
-  ],
+const CURRENT_USER_ID = "user-2";
+
+const LISTS_DB = {
+  "list-1": {
+    id: "list-1",
+    title: "Víkendový nákup",
+    ownerId: "user-1",
+    members: [
+      { id: "user-1", name: "Jan", role: "owner" },
+      { id: "user-2", name: "Eva", role: "member" },
+      { id: "user-3", name: "Petr", role: "member" },
+    ],
+    items: [
+      { id: "item-1", name: "Mléko", resolved: false },
+      { id: "item-2", name: "Chléb", resolved: false },
+      { id: "item-3", name: "Máslo", resolved: true },
+    ],
+  },
+
+  "list-2": {
+    id: "list-2",
+    title: "Party nákup",
+    ownerId: "user-2",
+    members: [
+      { id: "user-2", name: "Pavel", role: "owner" },
+      { id: "user-5", name: "Karel", role: "member" },
+    ],
+    items: [
+      { id: "x1", name: "Rum", resolved: false },
+      { id: "x2", name: "Limetky", resolved: false },
+    ],
+  },
 };
 
 export default function ListDetailPage() {
+  const { id } = useParams();            // ← získáme id z URL
+  const INITIAL_LIST = LISTS_DB[id];     // ← vybereme správný seznam
+
   const [title, setTitle] = useState(INITIAL_LIST.title);
+  const [members, setMembers] = useState(INITIAL_LIST.members);
   const [items, setItems] = useState(INITIAL_LIST.items);
   const [showResolved, setShowResolved] = useState(false);
-  const [newItemName, setNewItemName] = useState("");
 
-  const visibleItems = items.filter(
-    (item) => showResolved || !item.resolved
-  );
+  const navigate = useNavigate();
+
+  const isOwner = CURRENT_USER_ID === INITIAL_LIST.ownerId;
+  const currentUser = members.find((m) => m.id === CURRENT_USER_ID);
+
+  const handleRename = (newTitle) => {
+    if (!isOwner) return;
+    setTitle(newTitle);
+  };
+
+  const handleAddMember = (nameOrEmail) => {
+    if (!isOwner) return;
+    if (!nameOrEmail.trim()) return;
+
+    const newMember = {
+      id: `user-${Date.now()}`,
+      name: nameOrEmail.trim(),
+      role: "member",
+    };
+    setMembers((prev) => [...prev, newMember]);
+  };
+
+  const handleRemoveMember = (memberId) => {
+    if (!isOwner) return;
+    if (memberId === INITIAL_LIST.ownerId) {
+      alert("Vlastníka nelze odebrat.");
+      return;
+    }
+    setMembers((prev) => prev.filter((m) => m.id !== memberId));
+  };
+
+  const handleLeave = () => {
+    if (!currentUser) return;
+    if (currentUser.id === INITIAL_LIST.ownerId) {
+      alert("Vlastník nemůže odejít ze seznamu.");
+      return;
+    }
+    setMembers((prev) => prev.filter((m) => m.id !== CURRENT_USER_ID));
+  };
 
   const handleToggleResolved = (itemId) => {
     setItems((prev) =>
@@ -33,88 +100,50 @@ export default function ListDetailPage() {
     setItems((prev) => prev.filter((item) => item.id !== itemId));
   };
 
-  const handleAddItem = (e) => {
-    e.preventDefault();
-    if (!newItemName.trim()) return;
-
+  const handleAddItem = (name) => {
+    if (!name.trim()) return;
     const newItem = {
       id: `item-${Date.now()}`,
-      name: newItemName.trim(),
+      name: name.trim(),
       resolved: false,
     };
-
     setItems((prev) => [...prev, newItem]);
-    setNewItemName("");
   };
+
+  const visibleItems = items.filter(
+    (item) => showResolved || !item.resolved
+  );
 
   return (
     <div style={styles.page}>
-      <div style={styles.card}>
-        <h1>Nákupní seznam</h1>
+      <div style={styles.layout}>
+        <ListHeader
+          title={title}
+          isOwner={isOwner}
+          onRename={handleRename}
+          onBack={() => navigate("/lists")}
+        />
 
-        <label style={styles.blockLabel}>
-          Název:
-          <input
-            style={styles.titleInput}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+        <div style={styles.columns}>
+          <ItemsSection
+            items={visibleItems}
+            allItems={items}
+            showResolved={showResolved}
+            setShowResolved={setShowResolved}
+            onToggleResolved={handleToggleResolved}
+            onDelete={handleDeleteItem}
+            onAdd={handleAddItem}
           />
-        </label>
 
-        <div style={styles.toolbar}>
-          <label>
-            <input
-              type="checkbox"
-              checked={showResolved}
-              onChange={() => setShowResolved(!showResolved)}
-            />{" "}
-            Zobrazit i vyřešené položky
-          </label>
-          <span style={styles.counter}>
-            Nevyřešené: {items.filter((i) => !i.resolved).length} /{" "}
-            {items.length} celkem
-          </span>
+          <MembersSection
+            members={members}
+            isOwner={isOwner}
+            currentUserId={CURRENT_USER_ID}
+            onAdd={handleAddMember}
+            onRemove={handleRemoveMember}
+            onLeave={handleLeave}
+          />
         </div>
-
-        <ul style={styles.list}>
-          {visibleItems.map((item) => (
-            <li key={item.id} style={styles.listItem}>
-              <label
-                style={item.resolved ? styles.itemResolved : undefined}
-              >
-                <input
-                  type="checkbox"
-                  checked={item.resolved}
-                  onChange={() => handleToggleResolved(item.id)}
-                />{" "}
-                {item.name}
-              </label>
-              <button
-                style={styles.smallButton}
-                onClick={() => handleDeleteItem(item.id)}
-              >
-                🗑
-              </button>
-            </li>
-          ))}
-
-          {visibleItems.length === 0 && (
-            <li style={{ color: "#777" }}>Žádné položky k zobrazení.</li>
-          )}
-        </ul>
-
-        <form onSubmit={handleAddItem} style={styles.addForm}>
-          <input
-            style={styles.input}
-            type="text"
-            placeholder="Nová položka…"
-            value={newItemName}
-            onChange={(e) => setNewItemName(e.target.value)}
-          />
-          <button style={styles.primaryButton} type="submit">
-            Přidat
-          </button>
-        </form>
       </div>
     </div>
   );
@@ -122,75 +151,19 @@ export default function ListDetailPage() {
 
 const styles = {
   page: {
-    fontFamily: "system-ui, sans-serif",
+    fontFamily: "system-ui, -apple-system, sans-serif",
     backgroundColor: "#f5f5f7",
     minHeight: "100vh",
     padding: "24px",
-    display: "flex",
-    justifyContent: "center",
   },
-  card: {
-    backgroundColor: "white",
-    borderRadius: "8px",
-    padding: "20px",
-    maxWidth: "600px",
-    width: "100%",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+  layout: {
+    maxWidth: "960px",
+    margin: "0 auto",
   },
-  blockLabel: {
-    display: "block",
-    marginBottom: "12px",
-  },
-  titleInput: {
-    width: "100%",
-    padding: "6px 8px",
-    marginTop: "4px",
-  },
-  toolbar: {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "12px",
-  },
-  counter: {
-    color: "#444",
-  },
-  list: {
-    listStyle: "none",
-    padding: 0,
-    margin: 0,
-    marginBottom: "12px",
-  },
-  listItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    padding: "4px 0",
-  },
-  itemResolved: {
-    textDecoration: "line-through",
-    color: "#888",
-  },
-  smallButton: {
-    padding: "4px 8px",
-    border: "1px solid #ccc",
-    backgroundColor: "#fff",
-    cursor: "pointer",
-  },
-  addForm: {
-    display: "flex",
-    gap: "8px",
-  },
-  input: {
-    flex: 1,
-    padding: "6px 8px",
-    borderRadius: "4px",
-    border: "1px solid #ccc",
-  },
-  primaryButton: {
-    padding: "6px 12px",
-    backgroundColor: "#2563eb",
-    color: "white",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
+  columns: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr",
+    gap: "16px",
+    marginTop: "16px",
   },
 };
