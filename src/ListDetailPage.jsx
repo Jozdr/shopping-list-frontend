@@ -1,12 +1,13 @@
+// src/ListDetailPage.jsx
 import React, { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import ListHeader from "./components/ListHeader";
 import MembersSection from "./components/MembersSection";
 import ItemsSection from "./components/ItemsSection";
-import { useNavigate } from "react-router-dom";
-import { useParams } from "react-router-dom";
 
 const CURRENT_USER_ID = "user-2";
 
+// „databáze“ seznamů – jen pro účely úkolu
 const LISTS_DB = {
   "list-1": {
     id: "list-1",
@@ -30,34 +31,49 @@ const LISTS_DB = {
     ownerId: "user-2",
     members: [
       { id: "user-2", name: "Pavel", role: "owner" },
-      { id: "user-5", name: "Karel", role: "member" },
+      { id: "user-4", name: "Karel", role: "member" },
     ],
     items: [
       { id: "x1", name: "Rum", resolved: false },
       { id: "x2", name: "Limetky", resolved: false },
+      { id: "x3", name: "Led", resolved: true },
     ],
+  },
+
+  "list-3": {
+    id: "list-3",
+    title: "Starý seznam (archivovaný)",
+    ownerId: "user-1",
+    members: [
+      { id: "user-1", name: "Jan", role: "owner" },
+      { id: "user-2", name: "Eva", role: "member" },
+    ],
+    items: [{ id: "z1", name: "Staré zásoby", resolved: true }],
   },
 };
 
 export default function ListDetailPage() {
-  const { id } = useParams();            // ← získáme id z URL
-  const INITIAL_LIST = LISTS_DB[id];     // ← vybereme správný seznam
+  const navigate = useNavigate();
+  const { id } = useParams();
+
+  // vždycky vezmeme nějaký list – když není, fallback na list-1
+  const INITIAL_LIST = LISTS_DB[id] || LISTS_DB["list-1"];
 
   const [title, setTitle] = useState(INITIAL_LIST.title);
   const [members, setMembers] = useState(INITIAL_LIST.members);
   const [items, setItems] = useState(INITIAL_LIST.items);
   const [showResolved, setShowResolved] = useState(false);
 
-  const navigate = useNavigate();
-
   const isOwner = CURRENT_USER_ID === INITIAL_LIST.ownerId;
   const currentUser = members.find((m) => m.id === CURRENT_USER_ID);
 
+  // ---- název seznamu (jen owner) ----
   const handleRename = (newTitle) => {
     if (!isOwner) return;
     setTitle(newTitle);
   };
 
+  // ---- členové ----
   const handleAddMember = (nameOrEmail) => {
     if (!isOwner) return;
     if (!nameOrEmail.trim()) return;
@@ -88,6 +104,7 @@ export default function ListDetailPage() {
     setMembers((prev) => prev.filter((m) => m.id !== CURRENT_USER_ID));
   };
 
+  // ---- položky ----
   const handleToggleResolved = (itemId) => {
     setItems((prev) =>
       prev.map((item) =>
@@ -116,7 +133,7 @@ export default function ListDetailPage() {
 
   return (
     <div style={styles.page}>
-      <div style={styles.layout}>
+      <div style={styles.container}>
         <ListHeader
           title={title}
           isOwner={isOwner}
@@ -152,18 +169,18 @@ export default function ListDetailPage() {
 const styles = {
   page: {
     fontFamily: "system-ui, -apple-system, sans-serif",
-    backgroundColor: "#f5f5f7",
+    backgroundColor: "#f4f4f5",
     minHeight: "100vh",
-    padding: "24px",
+    padding: 24,
   },
-  layout: {
-    maxWidth: "960px",
+  container: {
+    maxWidth: 960,
     margin: "0 auto",
   },
   columns: {
     display: "grid",
     gridTemplateColumns: "2fr 1fr",
-    gap: "16px",
-    marginTop: "16px",
+    gap: 16,
+    marginTop: 16,
   },
 };
