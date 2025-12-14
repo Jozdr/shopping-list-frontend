@@ -1,60 +1,81 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ListTile from "./components/ListTile";
 import CreateListModal from "./components/CreateListModal";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
+import * as listApi from "./services/listApi";
 
 const CURRENT_USER_ID = "user-1";
 
-const INITIAL_LISTS = [
-  {
-    id: "list-1",
-    title: "Víkendový nákup",
-    ownerId: "user-1",
-    isArchived: false,
-  },
-  {
-    id: "list-2",
-    title: "Party nákup",
-    ownerId: "user-2",
-    isArchived: false,
-  },
-  {
-    id: "list-3",
-    title: "Starý seznam (archivovaný)",
-    ownerId: "user-1",
-    isArchived: true,
-  },
-];
-
 export default function ListOverviewPage() {
-  const [lists, setLists] = useState(INITIAL_LISTS);
+  const [lists, setLists] = useState([]);
+  const [status, setStatus] = useState("pending"); // pending | ready | error
+  const [error, setError] = useState(null);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
 
   const navigate = useNavigate();
 
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("pending");
+    setError(null);
+
+    listApi
+      .getLists()
+      .then((data) => {
+        if (cancelled) return;
+        setLists(data);
+        setStatus("ready");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error(err);
+        setError(err);
+        setStatus("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleCreateList = (title) => {
     if (!title.trim()) return;
 
-    const newList = {
-      id: `list-${Date.now()}`,
-      title: title.trim(),
-      ownerId: CURRENT_USER_ID,
-      isArchived: false,
-    };
-
-    setLists((prev) => [...prev, newList]);
-    setShowCreateModal(false);
+    setStatus("pending");
+    listApi
+      .createList({ title: title.trim(), ownerId: CURRENT_USER_ID })
+      .then((result) => {
+        setLists((prev) => [...prev, result.overview]);
+        setStatus("ready");
+        setShowCreateModal(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError(err);
+        setStatus("error");
+      });
   };
 
   const handleDeleteList = (id) => {
-    setLists((prev) => prev.filter((l) => l.id !== id));
-    setDeleteTarget(null);
+    setStatus("pending");
+    listApi
+      .deleteList(id)
+      .then(() => {
+        setLists((prev) => prev.filter((l) => l.id !== id));
+        setStatus("ready");
+        setDeleteTarget(null);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError(err);
+        setStatus("error");
+      });
   };
 
-  // filtr archivovaných
   const filteredLists = lists.filter(
     (list) => showArchived || !list.isArchived
   );
@@ -84,17 +105,29 @@ export default function ListOverviewPage() {
           </label>
         </div>
 
-        <div style={styles.grid}>
-          {filteredLists.map((list) => (
-            <ListTile
-              key={list.id}
-              list={list}
-              isOwner={list.ownerId === CURRENT_USER_ID}
-              onOpen={() => navigate(`/lists/${list.id}`)}
-              onDelete={() => setDeleteTarget(list)}
-            />
-          ))}
-        </div>
+        {/* stav načítání / chyba */}
+        {status === "pending" && (
+          <p style={styles.info}>Načítám nákupní seznamy…</p>
+        )}
+        {status === "error" && (
+          <p style={styles.error}>
+            Nastala chyba při načítání dat: {error?.message}
+          </p>
+        )}
+
+        {status === "ready" && (
+          <div style={styles.grid}>
+            {filteredLists.map((list) => (
+              <ListTile
+                key={list.id}
+                list={list}
+                isOwner={list.ownerId === CURRENT_USER_ID}
+                onOpen={() => navigate(`/lists/${list.id}`)}
+                onDelete={() => setDeleteTarget(list)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {showCreateModal && (
@@ -120,6 +153,7 @@ const styles = {
     padding: 24,
     backgroundColor: "#f4f4f5",
     minHeight: "100vh",
+    fontFamily: "system-ui, -apple-system, sans-serif",
   },
   container: {
     maxWidth: 960,
@@ -146,7 +180,7 @@ const styles = {
     fontSize: "1rem",
   },
   filterBar: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   filterLabel: {
     fontSize: "0.95rem",
@@ -157,5 +191,13 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
     gap: 20,
+  },
+  info: {
+    marginTop: 8,
+    color: "#4b5563",
+  },
+  error: {
+    marginTop: 8,
+    color: "#b91c1c",
   },
 };

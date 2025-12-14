@@ -1,76 +1,62 @@
 // src/ListDetailPage.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ListHeader from "./components/ListHeader";
 import MembersSection from "./components/MembersSection";
 import ItemsSection from "./components/ItemsSection";
+import * as listApi from "./services/listApi";
 
 const CURRENT_USER_ID = "user-2";
-
-// „databáze“ seznamů – jen pro účely úkolu
-const LISTS_DB = {
-  "list-1": {
-    id: "list-1",
-    title: "Víkendový nákup",
-    ownerId: "user-1",
-    members: [
-      { id: "user-1", name: "Jan", role: "owner" },
-      { id: "user-2", name: "Eva", role: "member" },
-      { id: "user-3", name: "Petr", role: "member" },
-    ],
-    items: [
-      { id: "item-1", name: "Mléko", resolved: false },
-      { id: "item-2", name: "Chléb", resolved: false },
-      { id: "item-3", name: "Máslo", resolved: true },
-    ],
-  },
-
-  "list-2": {
-    id: "list-2",
-    title: "Party nákup",
-    ownerId: "user-2",
-    members: [
-      { id: "user-2", name: "Pavel", role: "owner" },
-      { id: "user-4", name: "Karel", role: "member" },
-    ],
-    items: [
-      { id: "x1", name: "Rum", resolved: false },
-      { id: "x2", name: "Limetky", resolved: false },
-      { id: "x3", name: "Led", resolved: true },
-    ],
-  },
-
-  "list-3": {
-    id: "list-3",
-    title: "Starý seznam (archivovaný)",
-    ownerId: "user-1",
-    members: [
-      { id: "user-1", name: "Jan", role: "owner" },
-      { id: "user-2", name: "Eva", role: "member" },
-    ],
-    items: [{ id: "z1", name: "Staré zásoby", resolved: true }],
-  },
-};
 
 export default function ListDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // vždycky vezmeme nějaký list – když není, fallback na list-1
-  const INITIAL_LIST = LISTS_DB[id] || LISTS_DB["list-1"];
-
-  const [title, setTitle] = useState(INITIAL_LIST.title);
-  const [members, setMembers] = useState(INITIAL_LIST.members);
-  const [items, setItems] = useState(INITIAL_LIST.items);
+  const [title, setTitle] = useState("");
+  const [members, setMembers] = useState([]);
+  const [items, setItems] = useState([]);
   const [showResolved, setShowResolved] = useState(false);
 
-  const isOwner = CURRENT_USER_ID === INITIAL_LIST.ownerId;
+  const [status, setStatus] = useState("pending"); // pending | ready | error
+  const [error, setError] = useState(null);
+  const [ownerId, setOwnerId] = useState(null);
+
+  const isOwner = ownerId === CURRENT_USER_ID;
   const currentUser = members.find((m) => m.id === CURRENT_USER_ID);
+
+  // ---- načtení dat ze "serveru" podle id ----
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("pending");
+    setError(null);
+
+    listApi
+      .getListById(id)
+      .then((data) => {
+        if (cancelled) return;
+        setTitle(data.title);
+        setMembers(data.members || []);
+        setItems(data.items || []);
+        setOwnerId(data.ownerId);
+        setStatus("ready");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error(err);
+        setError(err);
+        setStatus("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   // ---- název seznamu (jen owner) ----
   const handleRename = (newTitle) => {
     if (!isOwner) return;
     setTitle(newTitle);
+    // pro tento úkol stačí lokálně – ukládání na server není nutné
   };
 
   // ---- členové ----
@@ -88,7 +74,7 @@ export default function ListDetailPage() {
 
   const handleRemoveMember = (memberId) => {
     if (!isOwner) return;
-    if (memberId === INITIAL_LIST.ownerId) {
+    if (memberId === ownerId) {
       alert("Vlastníka nelze odebrat.");
       return;
     }
@@ -97,7 +83,7 @@ export default function ListDetailPage() {
 
   const handleLeave = () => {
     if (!currentUser) return;
-    if (currentUser.id === INITIAL_LIST.ownerId) {
+    if (currentUser.id === ownerId) {
       alert("Vlastník nemůže odejít ze seznamu.");
       return;
     }
@@ -134,33 +120,55 @@ export default function ListDetailPage() {
   return (
     <div style={styles.page}>
       <div style={styles.container}>
-        <ListHeader
-          title={title}
-          isOwner={isOwner}
-          onRename={handleRename}
-          onBack={() => navigate("/lists")}
-        />
+        {status === "pending" && (
+          <p style={styles.info}>Načítám detail nákupního seznamu…</p>
+        )}
 
-        <div style={styles.columns}>
-          <ItemsSection
-            items={visibleItems}
-            allItems={items}
-            showResolved={showResolved}
-            setShowResolved={setShowResolved}
-            onToggleResolved={handleToggleResolved}
-            onDelete={handleDeleteItem}
-            onAdd={handleAddItem}
-          />
+        {status === "error" && (
+          <>
+            <p style={styles.error}>
+              Nastala chyba při načítání detailu: {error?.message}
+            </p>
+            <button
+              style={styles.backButton}
+              onClick={() => navigate("/lists")}
+            >
+              Zpět na přehled
+            </button>
+          </>
+        )}
 
-          <MembersSection
-            members={members}
-            isOwner={isOwner}
-            currentUserId={CURRENT_USER_ID}
-            onAdd={handleAddMember}
-            onRemove={handleRemoveMember}
-            onLeave={handleLeave}
-          />
-        </div>
+        {status === "ready" && (
+          <>
+            <ListHeader
+              title={title}
+              isOwner={isOwner}
+              onRename={handleRename}
+              onBack={() => navigate("/lists")}
+            />
+
+            <div style={styles.columns}>
+              <ItemsSection
+                items={visibleItems}
+                allItems={items}
+                showResolved={showResolved}
+                setShowResolved={setShowResolved}
+                onToggleResolved={handleToggleResolved}
+                onDelete={handleDeleteItem}
+                onAdd={handleAddItem}
+              />
+
+              <MembersSection
+                members={members}
+                isOwner={isOwner}
+                currentUserId={CURRENT_USER_ID}
+                onAdd={handleAddMember}
+                onRemove={handleRemoveMember}
+                onLeave={handleLeave}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -182,5 +190,19 @@ const styles = {
     gridTemplateColumns: "2fr 1fr",
     gap: 16,
     marginTop: 16,
+  },
+  info: {
+    color: "#4b5563",
+  },
+  error: {
+    color: "#b91c1c",
+    marginBottom: 12,
+  },
+  backButton: {
+    padding: "8px 12px",
+    borderRadius: 6,
+    border: "1px solid #d4d4d8",
+    backgroundColor: "#fff",
+    cursor: "pointer",
   },
 };
