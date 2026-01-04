@@ -11,3 +11,50 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+:root {
+  --bg: #f4f4f5;
+  --text: #111827;
+  --muted: #4b5563;
+  --card: #ffffff;
+  --border: #d4d4d8;
+  --primary: #2563eb;
+  --danger: #dc2626;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b1220;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --card: #111827;
+  --border: #374151;
+  --primary: #60a5fa;
+  --danger: #f87171;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+@media (max-width: 900px) {
+  .detailColumns {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .detailColumns {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .listGrid {
+    grid-template-columns: 1fr !important;
+  }
+}
+

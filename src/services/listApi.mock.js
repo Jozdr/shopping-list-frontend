@@ -57,7 +57,10 @@ function simulateDelay(result, shouldFail = false, delay = 400) {
 }
 
 export function getLists() {
-  const overview = mockLists.map(({ items, members, ...rest }) => rest);
+  const overview = mockLists.map(({ items, members, ...rest }) => ({
+    ...rest,
+    itemsCount: items?.length ?? 0,
+  }));
   return simulateDelay(overview);
 }
 
@@ -81,10 +84,18 @@ export function createList(data) {
     ],
     items: [],
   };
+
   mockLists = [...mockLists, newList];
 
   const { items, members, ...overview } = newList;
-  return simulateDelay({ full: newList, overview });
+
+  return simulateDelay({
+    full: newList,
+    overview: {
+      ...overview,
+      itemsCount: 0,
+    },
+  });
 }
 
 export function deleteList(id) {

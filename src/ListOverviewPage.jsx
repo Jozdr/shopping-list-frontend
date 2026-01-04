@@ -4,12 +4,15 @@ import ListTile from "./components/ListTile";
 import CreateListModal from "./components/CreateListModal";
 import ConfirmDeleteModal from "./components/ConfirmDeleteModal";
 import * as listApi from "./services/listApi";
+import { useApp } from "./app/AppProvider";
+
 
 const CURRENT_USER_ID = "user-1";
 
 export default function ListOverviewPage() {
+  const { t } = useApp();
   const [lists, setLists] = useState([]);
-  const [status, setStatus] = useState("pending"); // pending | ready | error
+  const [status, setStatus] = useState("pending"); 
   const [error, setError] = useState(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -84,13 +87,13 @@ export default function ListOverviewPage() {
     <div style={styles.page}>
       <div style={styles.container}>
         <header style={styles.header}>
-          <h1 style={styles.title}>Nákupní seznamy</h1>
+          <h1>{t("appTitle")}</h1>
 
           <button
             style={styles.createButton}
             onClick={() => setShowCreateModal(true)}
           >
-            + Nový seznam
+            {t("createNew")}
           </button>
         </header>
 
@@ -101,11 +104,10 @@ export default function ListOverviewPage() {
               checked={showArchived}
               onChange={() => setShowArchived(!showArchived)}
             />
-            <span style={{ marginLeft: 6 }}>Zobrazit včetně archivovaných</span>
+            {t("showArchived")}
           </label>
         </div>
 
-        {/* stav načítání / chyba */}
         {status === "pending" && (
           <p style={styles.info}>Načítám nákupní seznamy…</p>
         )}

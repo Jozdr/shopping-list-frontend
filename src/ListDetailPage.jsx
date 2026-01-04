@@ -1,32 +1,37 @@
 // src/ListDetailPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { PieChart, Pie, ResponsiveContainer, Tooltip, Legend, Cell } from "recharts";
+
 import ListHeader from "./components/ListHeader";
 import MembersSection from "./components/MembersSection";
 import ItemsSection from "./components/ItemsSection";
+
 import * as listApi from "./services/listApi";
+import { useApp } from "./app/AppProvider";
 
 const CURRENT_USER_ID = "user-2";
 
 export default function ListDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { t } = useApp();
 
   const [title, setTitle] = useState("");
   const [members, setMembers] = useState([]);
   const [items, setItems] = useState([]);
   const [showResolved, setShowResolved] = useState(false);
 
-  const [status, setStatus] = useState("pending"); // pending | ready | error
+  const [status, setStatus] = useState("pending"); 
   const [error, setError] = useState(null);
   const [ownerId, setOwnerId] = useState(null);
 
   const isOwner = ownerId === CURRENT_USER_ID;
   const currentUser = members.find((m) => m.id === CURRENT_USER_ID);
 
-  // ---- načtení dat ze "serveru" podle id ----
   useEffect(() => {
     let cancelled = false;
+
     setStatus("pending");
     setError(null);
 
@@ -34,10 +39,12 @@ export default function ListDetailPage() {
       .getListById(id)
       .then((data) => {
         if (cancelled) return;
-        setTitle(data.title);
-        setMembers(data.members || []);
-        setItems(data.items || []);
-        setOwnerId(data.ownerId);
+
+        setTitle(data?.title || "");
+        setMembers(data?.members || []);
+        setItems(data?.items || []);
+        setOwnerId(data?.ownerId || null);
+
         setStatus("ready");
       })
       .catch((err) => {
@@ -52,14 +59,21 @@ export default function ListDetailPage() {
     };
   }, [id]);
 
-  // ---- název seznamu (jen owner) ----
+  const pieData = useMemo(() => {
+    const resolvedCount = items.filter((item) => item.resolved).length;
+    const openCount = items.length - resolvedCount;
+
+    return [
+      { name: t("open"), value: openCount },
+      { name: t("resolved"), value: resolvedCount },
+    ];
+  }, [items, t]);
+
   const handleRename = (newTitle) => {
     if (!isOwner) return;
     setTitle(newTitle);
-    // pro tento úkol stačí lokálně – ukládání na server není nutné
   };
 
-  // ---- členové ----
   const handleAddMember = (nameOrEmail) => {
     if (!isOwner) return;
     if (!nameOrEmail.trim()) return;
@@ -75,7 +89,7 @@ export default function ListDetailPage() {
   const handleRemoveMember = (memberId) => {
     if (!isOwner) return;
     if (memberId === ownerId) {
-      alert("Vlastníka nelze odebrat.");
+      alert("Vlastníka nelze odebrat."); 
       return;
     }
     setMembers((prev) => prev.filter((m) => m.id !== memberId));
@@ -90,7 +104,6 @@ export default function ListDetailPage() {
     setMembers((prev) => prev.filter((m) => m.id !== CURRENT_USER_ID));
   };
 
-  // ---- položky ----
   const handleToggleResolved = (itemId) => {
     setItems((prev) =>
       prev.map((item) =>
@@ -113,27 +126,20 @@ export default function ListDetailPage() {
     setItems((prev) => [...prev, newItem]);
   };
 
-  const visibleItems = items.filter(
-    (item) => showResolved || !item.resolved
-  );
+  const visibleItems = items.filter((item) => showResolved || !item.resolved);
 
   return (
     <div style={styles.page}>
       <div style={styles.container}>
-        {status === "pending" && (
-          <p style={styles.info}>Načítám detail nákupního seznamu…</p>
-        )}
+        {status === "pending" && <p style={styles.info}>{t("loadingDetail")}</p>}
 
         {status === "error" && (
           <>
             <p style={styles.error}>
-              Nastala chyba při načítání detailu: {error?.message}
+              {t("loadError")} {error?.message}
             </p>
-            <button
-              style={styles.backButton}
-              onClick={() => navigate("/lists")}
-            >
-              Zpět na přehled
+            <button style={styles.backButton} onClick={() => navigate("/lists")}>
+              {t("back")}
             </button>
           </>
         )}
@@ -147,7 +153,35 @@ export default function ListDetailPage() {
               onBack={() => navigate("/lists")}
             />
 
-            <div style={styles.columns}>
+            <div style={styles.statsCard}>
+              <h3 style={{ margin: 0 }}>{t("detailChartTitle")}</h3>
+
+              <div style={{ height: 220, marginTop: 8 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                     data={pieData}
+                     dataKey="value"
+                      nameKey="name"
+                      outerRadius={80}
+                      label
+                    >
+                      {pieData.map((entry, index) => (
+                      <Cell
+                      key={`cell-${index}`}
+                       fill={entry.name === t("resolved") ? "#2563eb" : "#dc2626"}
+                      />
+                          ))}
+                      </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="detailColumns" style={styles.columns}>
               <ItemsSection
                 items={visibleItems}
                 allItems={items}
@@ -176,10 +210,10 @@ export default function ListDetailPage() {
 
 const styles = {
   page: {
-    fontFamily: "system-ui, -apple-system, sans-serif",
-    backgroundColor: "#f4f4f5",
+    backgroundColor: "var(--bg)",
     minHeight: "100vh",
     padding: 24,
+    color: "var(--text)",
   },
   container: {
     maxWidth: 960,
@@ -191,18 +225,26 @@ const styles = {
     gap: 16,
     marginTop: 16,
   },
+  statsCard: {
+    background: "var(--card)",
+    border: "1px solid var(--border)",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
   info: {
-    color: "#4b5563",
+    color: "var(--muted)",
   },
   error: {
-    color: "#b91c1c",
+    color: "var(--danger)",
     marginBottom: 12,
   },
   backButton: {
     padding: "8px 12px",
-    borderRadius: 6,
-    border: "1px solid #d4d4d8",
-    backgroundColor: "#fff",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    backgroundColor: "var(--card)",
+    color: "var(--text)",
     cursor: "pointer",
   },
 };
